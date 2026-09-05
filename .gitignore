@@ -1,0 +1,33 @@
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# runtime data — uploads, database, generated artifacts
+var/
+*.db
+*.db-wal
+*.db-shm
+
+# secrets
+.env
+.env.local
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# scratch
+shot*.mjs
