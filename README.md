@@ -58,6 +58,11 @@ diagram authoring, paper analysis and the Skeptic mode switch on.
 
 ### With Docker — one command
 
+Needs a machine with a real Linux kernel: Linux, macOS or Windows with Docker
+Desktop, or a VPS. **Docker cannot run inside Termux on Android** — it needs
+control of kernel namespaces and cgroups that Android does not hand to a
+userland app. See [Running on Android](#running-on-android) instead.
+
 ```bash
 git clone -b claude/assalamu-aleikum-nrg1aa https://github.com/Firephase/Barbiegame.git
 cd Barbiegame
@@ -91,6 +96,40 @@ Either way: API docs at `/docs`, and a live report of what is switched on — an
 make test                         # 82 backend tests, no network needed
 make typecheck                    # frontend
 ```
+
+### Running on Android
+
+Termux alone is not enough: the scientific stack (NumPy, pandas, SciPy,
+matplotlib) has no Termux-native builds, and Docker cannot run there at all.
+What does work is a Linux userland under `proot-distro`, where pip finds
+prebuilt `aarch64` wheels for every dependency and nothing has to compile.
+
+```bash
+# --- in Termux ---
+pkg update -y && pkg install -y proot-distro
+proot-distro install ubuntu
+proot-distro login ubuntu
+
+# --- now inside Ubuntu ---
+apt update && apt install -y python3 python3-venv python3-pip git nodejs npm
+git clone -b claude/assalamu-aleikum-nrg1aa https://github.com/Firephase/Barbiegame.git
+cd Barbiegame
+
+python3 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -r backend/requirements.txt
+
+cd frontend && npm install && npm run build && cd ..
+cd backend && ../.venv/bin/uvicorn app.main:app --port 8000
+```
+
+Then open **http://localhost:8000** in the phone's browser — the API serves the
+UI it just built, so one port is all you need.
+
+Expect roughly 400–500 MB of downloads and a slow first build; do it on wi-fi
+and on charge. After the first run, starting it again is just the last two
+lines. To skip the UI build entirely, run only the `uvicorn` line and use the
+API through `/docs`.
 
 ---
 
