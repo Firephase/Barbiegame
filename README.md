@@ -56,13 +56,36 @@ diagram authoring, paper analysis and the Skeptic mode switch on.
 
 ## Quick start
 
+### With Docker — one command
+
+```bash
+git clone -b claude/assalamu-aleikum-nrg1aa https://github.com/Firephase/Barbiegame.git
+cd Barbiegame
+docker compose up --build          # or: make up
+```
+
+Open **http://localhost:8000**. The UI and the API are served from the same
+port, so there is nothing else to wire up. Uploads and the database live in a
+named volume and survive a rebuild.
+
+To add keys, drop a `.env` beside `docker-compose.yml` before starting (see
+`.env.example`) — compose reads it automatically.
+
+The image also installs Tesseract, so OCR for scanned PDFs and photographed
+notes works out of the box, which it does not in a bare local install.
+
+### Without Docker
+
 ```bash
 make install                      # venv + npm install
 cp .env.example .env              # optional: add keys
 make dev                          # API on :8000, UI on :5173
 ```
 
-Open http://localhost:5173. The API docs are at http://localhost:8000/docs.
+Open http://localhost:5173. Needs Python 3.11+ and Node 18+.
+
+Either way: API docs at `/docs`, and a live report of what is switched on — and
+*why* anything is off — at `/api/providers`.
 
 ```bash
 make test                         # 82 backend tests, no network needed

@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .core.errors import WorkspaceError
@@ -100,8 +103,8 @@ for router in (
     app.include_router(router, prefix="/api")
 
 
-@app.get("/")
-def root() -> dict:
+@app.get("/api")
+def api_root() -> dict:
     return {
         "name": settings.app_name,
         "docs": "/docs",
@@ -111,3 +114,33 @@ def root() -> dict:
             "Every answer states what was found, where it came from, and how certain it is."
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# Serve the built UI from the same origin, when it has been built.
+#
+# In development the UI runs on Vite's own port and proxies /api here, so this
+# mount is absent and nothing changes. In a container image the frontend is
+# built into ``frontend/dist`` and served from this process, which is why
+# `docker compose up` needs only one published port.
+#
+# Registered last, so it can never shadow an /api route.
+# ---------------------------------------------------------------------------
+_FRONTEND_DIST = Path(
+    os.environ.get("FRONTEND_DIST", Path(__file__).resolve().parents[2] / "frontend" / "dist")
+)
+
+if (_FRONTEND_DIST / "index.html").is_file():
+    app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="ui")
+    log.info("Serving the built UI from %s", _FRONTEND_DIST)
+else:
+    @app.get("/")
+    def root() -> dict:
+        return {
+            **api_root(),
+            "ui": (
+                "The frontend is not built into this deployment. Run it separately with "
+                "`npm run dev` in ./frontend, or build it with `npm run build` so it is "
+                "served from here."
+            ),
+        }
