@@ -127,11 +127,13 @@ export default function App() {
   }, [refreshProject]);
 
   /* ---------------------------------------------------------------- ask */
-  const ask = async (question: string) => {
+  const ask = async (question: string, from: "ask" | "chat" = "ask") => {
     if (!projectId) return;
     setBusy(true);
     setAnswer(null);
-    setTab("ask");
+    // Asking from the Chat composer should leave you in Chat, where the new
+    // turn appears in the thread you were already reading.
+    if (from === "ask") setTab("ask");
     try {
       const result = await api.research({
         question,
@@ -352,12 +354,19 @@ export default function App() {
                 onFollowup={(q) => { setSeed(q); setTab("ask"); }}
                 onExport={(messageId, format) => exportAnswer(messageId, format)}
                 onSaveFinding={saveFinding}
+                onAsk={(q) => ask(q, "chat")}
+                busy={busy}
+                mode={mode}
               />
             )}
             {project && tab === "files" && (
               <FilesTab project={project} sources={sources} reload={refreshProject} onFail={fail} />
             )}
-            {tab === "images" && <ImagesTab sources={sources} onFail={fail} />}
+            {tab === "images" && (
+              <ImagesTab
+                sources={sources} onFail={fail} hasVisionModel={hasReasoningModel}
+              />
+            )}
             {project && tab === "data" && (
               <DataTab
                 project={project} sources={sources} capabilities={capabilities} onFail={fail}

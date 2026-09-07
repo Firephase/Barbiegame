@@ -247,31 +247,42 @@ function SynthesisView({ data, onClose }: { data: any; onClose: () => void }) {
 
 /* ------------------------------------------------------------------ Chat */
 export function ChatTab({
-  messages, onFollowup, onExport, onSaveFinding,
+  messages, onFollowup, onExport, onSaveFinding, onAsk, busy, mode,
 }: {
   messages: Message[];
   onFollowup: (q: string) => void;
   onExport: (messageId: string, format: string) => void;
   onSaveFinding: (claim: any) => void;
+  onAsk: (question: string) => void;
+  busy: boolean;
+  mode: string;
 }) {
   const bottom = useRef<HTMLDivElement>(null);
+  const [draft, setDraft] = useState("");
+
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  if (!messages.length) {
-    return (
-      <Empty title="Nothing asked yet">
-        <p>
-          Every question and every answer is kept here with its sources, so a follow-up like
-          “now only the last five years” refines what you already have instead of starting over.
-        </p>
-      </Empty>
-    );
-  }
+  const send = () => {
+    const question = draft.trim();
+    if (!question || busy) return;
+    onAsk(question);
+    setDraft("");
+  };
 
   return (
     <div>
+      {messages.length === 0 && (
+        <Empty title="Nothing asked yet">
+          <p>
+            Ask below. Every question and answer is kept here with its sources, so a follow-up
+            like “now only the last five years” refines what you already have instead of
+            starting over.
+          </p>
+        </Empty>
+      )}
+
       {messages.map((message) =>
         message.role === "user" ? (
           <div key={message.id} className="turn user">
@@ -292,7 +303,40 @@ export function ChatTab({
           </div>
         ),
       )}
+
+      {busy && (
+        <div className="card">
+          <Spinner label="Searching, reading and checking sources…" />
+        </div>
+      )}
+
       <div ref={bottom} />
+
+      {/* The composer lives here as well as on Ask — a tab called Chat that you
+          cannot type into is a dead end, which is exactly how it read on a phone. */}
+      <div className="composer">
+        <textarea
+          rows={2}
+          value={draft}
+          placeholder="Ask a follow-up…"
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+        />
+        <div className="row" style={{ marginTop: 8 }}>
+          <span className="small muted">
+            Mode: <b>{mode.replace(/_/g, " ")}</b> — change it on the Ask tab
+          </span>
+          <span className="spacer" />
+          <button className="btn primary" onClick={send} disabled={busy || !draft.trim()}>
+            {busy ? <span className="spinner" /> : "Send"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -533,10 +577,11 @@ function VideoResult({ data }: { data: any }) {
 
 /* ------------------------------------------------------------------ Images */
 export function ImagesTab({
-  sources, onFail,
+  sources, onFail, hasVisionModel,
 }: {
   sources: Source[];
   onFail: Fail;
+  hasVisionModel: boolean;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [question, setQuestion] = useState("");
@@ -579,43 +624,124 @@ export function ImagesTab({
     );
   }
 
+  // Say why a control is unavailable, on the control itself. A disabled button
+  // with no explanation is indistinguishable from a broken one.
+  const analyseBlocked = !hasVisionModel
+    ? "Needs a vision model — set ANTHROPIC_API_KEY or OPENAI_API_KEY"
+    : selected.size === 0
+      ? "Select one image first"
+      : selected.size > 1
+        ? "Select exactly one image to analyse"
+        : "";
+  const compareBlocked = !hasVisionModel
+    ? "Needs a vision model — set ANTHROPIC_API_KEY or OPENAI_API_KEY"
+    : selected.size < 2
+      ? "Select at least two images to compare"
+      : "";
+
   return (
     <div>
-      <div className="row wrap" style={{ marginBottom: 12, gap: 8 }}>
+      {!hasVisionModel && (
+        <div className="warning-box">
+          <strong>Image analysis is switched off</strong>
+          <p style={{ margin: "4px 0 0" }}>
+            Reading an image needs a vision-capable model, and none is configured. Set
+            <code> ANTHROPIC_API_KEY</code> or <code> OPENAI_API_KEY</code> in your
+            <code> .env</code> and restart. Your images stay in the project either way —
+            nothing is lost. Search, papers, statistics and charts all work without it.
+          </p>
+        </div>
+      )}
+
+      <div className="card tight" style={{ marginBottom: 12 }}>
         <input
           type="text" placeholder="What do you want to know about these images?"
-          value={question} onChange={(e) => setQuestion(e.target.value)} style={{ maxWidth: 460 }}
+          value={question} onChange={(e) => setQuestion(e.target.value)}
         />
-        <button className="btn" disabled={busy || selected.size !== 1} onClick={() => run(false)}>
-          Analyse
-        </button>
-        <button className="btn" disabled={busy || selected.size < 2} onClick={() => run(true)}>
-          Compare {selected.size > 1 ? selected.size : ""}
-        </button>
-        {busy && <Spinner label="Reading images…" />}
+        <div className="row wrap" style={{ marginTop: 10, gap: 8 }}>
+          <span className="small muted">
+            {selected.size === 0
+              ? "Tap an image below to select it"
+              : `${selected.size} of ${images.length} selected`}
+          </span>
+          {selected.size > 0 && (
+            <button className="btn ghost small" onClick={() => setSelected(new Set())}>
+              Clear
+            </button>
+          )}
+          {images.length > 1 && selected.size !== images.length && (
+            <button
+              className="btn ghost small"
+              onClick={() => setSelected(new Set(images.map((i) => i.id)))}
+            >
+              Select all
+            </button>
+          )}
+          <span className="spacer" />
+          <button
+            className="btn" disabled={busy || !!analyseBlocked}
+            title={analyseBlocked} onClick={() => run(false)}
+          >
+            Analyse
+          </button>
+          <button
+            className="btn" disabled={busy || !!compareBlocked}
+            title={compareBlocked} onClick={() => run(true)}
+          >
+            Compare{selected.size > 1 ? ` ${selected.size}` : ""}
+          </button>
+        </div>
+        {(analyseBlocked || compareBlocked) && !busy && (
+          <div className="small muted" style={{ marginTop: 8 }}>
+            {analyseBlocked && compareBlocked && analyseBlocked === compareBlocked
+              ? analyseBlocked
+              : [analyseBlocked && `Analyse: ${analyseBlocked}`,
+                 compareBlocked && `Compare: ${compareBlocked}`]
+                  .filter(Boolean)
+                  .join(" · ")}
+          </div>
+        )}
+        {busy && <div style={{ marginTop: 8 }}><Spinner label="Reading images…" /></div>}
       </div>
 
       <div className="grid three">
-        {images.map((image, i) => (
-          <div
-            key={image.id}
-            className="card tight"
-            onClick={() => toggle(image.id)}
-            style={{
-              cursor: "pointer",
-              borderColor: selected.has(image.id) ? "var(--accent)" : undefined,
-              boxShadow: selected.has(image.id) ? "0 0 0 3px var(--accent-soft)" : undefined,
-            }}
-          >
-            <img
-              src={api.fileUrl(image.id)} alt={image.title}
-              style={{ width: "100%", borderRadius: 6, display: "block", background: "var(--surface-2)" }}
-            />
-            <div className="small" style={{ marginTop: 6 }}>
-              <span className="mono muted">IMG{i + 1}</span> {image.title}
+        {images.map((image, i) => {
+          const isSelected = selected.has(image.id);
+          return (
+            <div
+              key={image.id}
+              className="card tight image-card"
+              role="checkbox"
+              aria-checked={isSelected}
+              tabIndex={0}
+              onClick={() => toggle(image.id)}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  toggle(image.id);
+                }
+              }}
+              style={{
+                cursor: "pointer",
+                borderColor: isSelected ? "var(--accent)" : undefined,
+                boxShadow: isSelected ? "0 0 0 3px var(--accent-soft)" : undefined,
+              }}
+            >
+              <div style={{ position: "relative" }}>
+                <img
+                  src={api.fileUrl(image.id)} alt={image.title}
+                  style={{ width: "100%", borderRadius: 6, display: "block", background: "var(--surface-2)" }}
+                />
+                <span className={`select-dot ${isSelected ? "on" : ""}`} aria-hidden="true">
+                  {isSelected ? "✓" : ""}
+                </span>
+              </div>
+              <div className="small" style={{ marginTop: 6 }}>
+                <span className="mono muted">IMG{i + 1}</span> {image.title}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {result && <ImageResult data={result} />}
