@@ -127,9 +127,20 @@ Then open **http://localhost:8000** in the phone's browser — the API serves th
 UI it just built, so one port is all you need.
 
 Expect roughly 400–500 MB of downloads and a slow first build; do it on wi-fi
-and on charge. After the first run, starting it again is just the last two
-lines. To skip the UI build entirely, run only the `uvicorn` line and use the
-API through `/docs`.
+and on charge. To skip the UI build entirely, run only the `uvicorn` line and
+use the API through `/docs`.
+
+Afterwards, starting it and updating it are one command each:
+
+```bash
+make serve      # run it again; add HOST=0.0.0.0 to reach it from another device
+make update     # git pull, reinstall deps, rebuild the UI
+```
+
+`make update` is the counterpart to `docker compose up --build` for installs
+that cannot run Docker. Note that `docker compose up -d` on its own reuses the
+existing image and would silently keep running the old code — after a pull,
+`--build` is not optional.
 
 ---
 
